@@ -2,6 +2,8 @@
 
 ## NeoVim plugin for Bun JavaScript runtime
 
+This plugin adds `Bun` subcommand and shows `node_modules.bun` and `bun.lockb` files
+
 # Installation 
 
 ### use your favorite package manager

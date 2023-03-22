@@ -1,4 +1,4 @@
-require("lua.bun.init").setup({
+require("bun").setup({
     close_on_exit = false,
-    cwd = "relative"
+    cwd = "current"
 })

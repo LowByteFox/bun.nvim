@@ -1,4 +1,6 @@
 local ok, term = pcall(require, 'toggleterm.terminal')
+local lockb = require("bun.lockb")
+local modulesbun = require("bun.modulesbun")
 
 if not ok then
     vim.cmd.echoerr("Missing 'toggleterm', please install 'akinsho/toggleterm.nvim'")
@@ -35,7 +37,13 @@ function M.run_current()
     run_term("run " .. path)
 end
 
+local function ends_with(str, ending)
+   return ending == "" or str:sub(-#ending) == ending
+end
+
 function M.setup(conf)
+    lockb.register()
+    modulesbun.register()
     if not conf then
         config = {
             close_on_exit = true,
@@ -76,7 +84,10 @@ function M.setup(conf)
     end,
     {
         nargs = 1,
-        complete = function()
+        complete = function(arg, cmd)
+            if ends_with(cmd, "run") then
+                return vim.fs.dir(vim.fn.getcwd())
+            end
             return { "run", "run_current", "x", "test", "init", "create", "install", "add", "link", "remove", "unlink", "pm", "dev", "bun", "upgrade", "completions", "discord", "help"}
         end
     }
