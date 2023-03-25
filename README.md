@@ -17,6 +17,7 @@ Examples: <br>
 
 using `packer`
 ```lua
+use('nvim-treesitter/nvim-treesitter') -- this is a must for tests!
 use('akinsho/toggleterm.nvim') -- this is a must!
 use('Fire-The-Fox/bun.nvim')
 ```
@@ -25,6 +26,7 @@ use('Fire-The-Fox/bun.nvim')
 
 using `vim-plug`
 ```vim
+Plug 'nvim-treesitter/nvim-treesitter' " this is a must for tests!
 Plug 'akinsho/toggleterm.nvim' " this is a must!
 Plug 'Fire-The-Fox/bun.nvim'
 ```
