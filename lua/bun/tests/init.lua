@@ -1,0 +1,202 @@
+local utils = require("bun.utils")
+local stack = require("bun.stack")
+local execution = require("bun.tests.execution")
+
+local M = {}
+
+local function transform_to_tree(tbl, tbl2)
+    for i, v in pairs(tbl) do
+        if type(v) == "table" then
+            tbl2[i] = {opened = false}
+            transform_to_tree(v, tbl2[i])
+        else
+            table.insert(tbl2, v)
+        end
+    end
+end
+
+local function color_test_pass(line)
+    vim.cmd.sign("place 1 name=BunPass line=" .. tostring(line))
+end
+
+
+local function color_test_fail(line)
+    vim.cmd.sign("place 1 name=BunFail line=" .. tostring(line))
+end
+
+local function check(lines)
+    local line = vim.api.nvim_win_get_cursor(0)[1]
+    if lines[line] and lines[line].func then
+        local res = lines[line].func()
+        if type(res) == "boolean" then
+            if res then
+                color_test_pass(line)
+            else
+                color_test_fail(line)
+            end
+        end
+    end
+end
+
+local function highlighter(lines)
+    local line = vim.api.nvim_win_get_cursor(0)[1]
+    if lines[line] and type(lines[line].highlight) == "boolean" then
+        vim.cmd.set("cursorline")
+        if lines[line].highlight then
+            vim.cmd.hi("CursorLine ctermbg=none ctermfg=lightgreen guibg=none guifg=lightgreen")
+        else
+            vim.cmd.hi("CursorLine ctermbg=none ctermfg=red guibg=none guifg=red")
+        end
+    else
+        vim.cmd.set("nocursorline")
+    end
+end
+
+local function expand(lines)
+    local line = vim.api.nvim_win_get_cursor(0)[1]
+    if lines[line] and lines[line].func then
+        lines[line].func()
+    end
+end
+
+local function lines_to_table(lines)
+    local t = {}
+    for i, v in pairs(lines) do
+        table.insert(t, v.text)
+    end
+    return t
+end
+
+local function shallowcopy(orig)
+    local orig_type = type(orig)
+    local copy
+    if orig_type == 'table' then
+        copy = {}
+        for orig_key, orig_value in pairs(orig) do
+            copy[orig_key] = orig_value
+        end
+    else -- number, string, boolean, etc
+        copy = orig
+    end
+    return copy
+end
+
+local function generate(lines, opened, data, depth, names)
+    local improved_table = {}
+    for k, v in pairs(opened) do
+        table.insert(improved_table, { i = k, v = v })
+    end
+    for i, v in ipairs(improved_table) do
+        if type(v.v) == "table" then
+            if v.v.opened then
+                table.insert(lines, { text = string.rep(" ", depth) .. "⌄ " .. v.i, func = function() v.v.opened = false end, highlight = nil})
+                -- table.insert(names, v.i)
+                names:push(v.i)
+                generate(lines, v.v, data[v.i], depth + 2, names)
+            else
+                table.insert(lines, { text = string.rep(" ", depth) .. "> " .. v.i, func = function() v.v.opened = true end, highlight = nil})
+            end
+        else
+            local val = data[i]
+            local copy = shallowcopy(names._et)
+            if val then
+                table.insert(lines, { text = string.rep(" ", depth) .. val, func = function()
+                    local pattern = "" .. (copy[1] or "")
+                    for index, name in ipairs(copy) do
+                        if index > 1 then
+                            pattern = pattern .. " > " .. name
+                        end
+                    end
+                    local path;
+                    if #pattern > 0 then
+                        path = pattern .. " > " .. val
+                    else
+                        path = val
+                    end
+                    local output = execution.get_test_result(vim.fn.expand("%:t"))
+
+                    for _, line in ipairs(output) do
+                        local res = execution.check_result(line, path .. "\n")
+                        if res then
+                            if res == string.sub("✓", 0, 3) then
+                                return true
+                            else
+                                return false
+                            end
+                        end
+                    end
+                end, highlight = nil })
+            end
+        end
+    end
+    if #names._et > 0 then
+        names:pop()
+    end
+end
+
+function M.handler()
+    local HEIGHT_RATIO = 0.8 -- You can change this
+    local WIDTH_RATIO = 0.8  -- You can change this too
+
+    vim.cmd.hi("BunTestFail ctermfg=red ctermbg=lightred guifg=red guibg=lightred")
+    vim.cmd.hi("BunTestFailN ctermfg=red guifg=red")
+    vim.cmd.hi("BunTestPass ctermfg=green ctermbg=lightgreen guifg=green guibg=lightgreen")
+    vim.cmd.hi("BunTestPassN ctermfg=green guifg=green")
+    vim.cmd.sign("define BunFail numhl=BunTestFailN linehl=BunTestFail")
+    vim.cmd.sign("define BunPass numhl=BunTestPassN linehl=BunTestPass")
+
+    local tests = utils.get_tests()
+    local opened = {}
+    transform_to_tree(tests, opened)
+
+    local screen_w = vim.opt.columns:get()
+    local screen_h = vim.opt.lines:get() - vim.opt.cmdheight:get()
+    local window_w = screen_w * WIDTH_RATIO
+    local window_h = screen_h * HEIGHT_RATIO
+    local window_w_int = math.floor(window_w)
+    local window_h_int = math.floor(window_h)
+    local center_x = (screen_w - window_w) / 2
+    local center_y = ((vim.opt.lines:get() - window_h) / 2) - vim.opt.cmdheight:get()
+
+    local win = utils.setup_floating_window(center_x, center_y, window_w_int, window_h_int, "rounded")
+    vim.api.nvim_buf_set_lines(win.buf, 0, -1, true, {"Ahoj", "Cau"})
+
+    local buf_num = vim.api.nvim_buf_get_number(win.buf)
+    local x = 1;
+
+    local lines = {}
+    generate(lines, opened, tests, 0, stack:Create())
+    vim.api.nvim_buf_set_lines(win.buf, 0, -1, true, lines_to_table(lines))
+
+    vim.keymap.set("n", "<return>", function()
+        vim.cmd.sign("unplace * buffer=" .. tostring(buf_num))
+        expand(lines)
+        lines = {}
+        generate(lines, opened, tests, 0, stack:Create())
+        vim.api.nvim_buf_set_lines(win.buf, 0, -1, true, lines_to_table(lines))
+    end, { buffer = buf_num })
+
+    vim.keymap.set("n", "<leader>r", function ()
+        check(lines)
+        -- highlighter(lines)
+    end, { buffer = buf_num })
+
+    vim.keymap.set("n", "<Up>", function()
+        x = x - 1
+        if x < 1 then
+            x = 1
+        end
+        vim.cmd.call("cursor(" .. tostring(x) .. ", col('.'))")
+        -- highlighter(lines)
+    end, { buffer = buf_num })
+    vim.keymap.set("n", "<Down>", function()
+        x = x + 1
+        if x > #lines then
+            x = #lines
+        end
+        vim.cmd.call("cursor(" .. tostring(x) .. ", col('.'))")
+        -- highlighter(lines)
+    end, { buffer = buf_num })
+end
+
+return M
