@@ -1,5 +1,4 @@
 local ts_utils = require('nvim-treesitter.ts_utils')
-local stack = require("bun.stack")
 
 local M = {}
 local code_buf = nil
@@ -12,7 +11,7 @@ local get_ast_root = function()
 
     local parent = node:parent()
 
-    while (parent ~= nil) do 
+    while (parent ~= nil) do
         node = parent
         parent = node:parent()
     end
@@ -36,11 +35,11 @@ local function traverse(node, dat)
             local child2 = child:named_child(0)
             type = child2:type()
             if type == "identifier" then
-                local rs, cs, re, ce = child2:range()
+                local rs, cs, _, ce = child2:range()
                 local func_name = all_trim(get_text(rs + 1, cs, ce))
                 if func_name == "describe" or func_name == "it" or func_name == "test" then
                     local first_param = child2:next_sibling():child(1):child(1);
-                    rs, cs, re, ce = first_param:range()
+                    rs, cs, _, ce = first_param:range()
                     local test_name = get_text(rs + 1, cs + 1, ce)
                     if func_name ~= "describe" then
                         table.insert(dat, test_name)

@@ -4,6 +4,12 @@ local execution = require("bun.tests.execution")
 
 local M = {}
 
+local config = {
+    width = 0.8,
+    height = 0.8,
+    border = "rounded"
+}
+
 local function transform_to_tree(tbl, tbl2)
     for i, v in pairs(tbl) do
         if type(v) == "table" then
@@ -38,20 +44,6 @@ local function check(lines)
     end
 end
 
-local function highlighter(lines)
-    local line = vim.api.nvim_win_get_cursor(0)[1]
-    if lines[line] and type(lines[line].highlight) == "boolean" then
-        vim.cmd.set("cursorline")
-        if lines[line].highlight then
-            vim.cmd.hi("CursorLine ctermbg=none ctermfg=lightgreen guibg=none guifg=lightgreen")
-        else
-            vim.cmd.hi("CursorLine ctermbg=none ctermfg=red guibg=none guifg=red")
-        end
-    else
-        vim.cmd.set("nocursorline")
-    end
-end
-
 local function expand(lines)
     local line = vim.api.nvim_win_get_cursor(0)[1]
     if lines[line] and lines[line].func then
@@ -61,7 +53,7 @@ end
 
 local function lines_to_table(lines)
     local t = {}
-    for i, v in pairs(lines) do
+    for _, v in pairs(lines) do
         table.insert(t, v.text)
     end
     return t
@@ -135,8 +127,8 @@ local function generate(lines, opened, data, depth, names)
 end
 
 function M.handler()
-    local HEIGHT_RATIO = 0.8 -- You can change this
-    local WIDTH_RATIO = 0.8  -- You can change this too
+    local HEIGHT_RATIO = config.height
+    local WIDTH_RATIO = config.width
 
     vim.cmd.hi("BunTestFail ctermfg=red ctermbg=lightred guifg=red guibg=lightred")
     vim.cmd.hi("BunTestFailN ctermfg=red guifg=red")
@@ -158,11 +150,10 @@ function M.handler()
     local center_x = (screen_w - window_w) / 2
     local center_y = ((vim.opt.lines:get() - window_h) / 2) - vim.opt.cmdheight:get()
 
-    local win = utils.setup_floating_window(center_x, center_y, window_w_int, window_h_int, "rounded")
+    local win = utils.setup_floating_window(center_x, center_y, window_w_int, window_h_int, config.border)
     vim.api.nvim_buf_set_lines(win.buf, 0, -1, true, {"Ahoj", "Cau"})
 
     local buf_num = vim.api.nvim_buf_get_number(win.buf)
-    local x = 1;
 
     local lines = {}
     generate(lines, opened, tests, 0, stack:Create())
@@ -180,23 +171,44 @@ function M.handler()
         check(lines)
         -- highlighter(lines)
     end, { buffer = buf_num })
+end
 
-    vim.keymap.set("n", "<Up>", function()
-        x = x - 1
-        if x < 1 then
-            x = 1
+function M.setup(conf)
+
+    if not conf then
+        config = {
+            width = 0.8,
+            height = 0.8,
+            border = "rounded"
+        }
+    else
+        config = conf
+    end
+
+    if config.width == nil then
+        config.width = 0.8
+    end
+
+    if config.width > 1.0 then
+        config.width = 1.0
+    end
+
+    if config.height == nil then
+        config.height = 0.8
+    end
+
+    if config.height > 1.0 then
+        config.height = 1.0
+    end
+
+    if config.border ~= "none" and
+        config.border ~= "single" and
+        config.border ~= "double" and
+        config.border ~= "solid" and
+        config.border ~= "shadow" and
+        config.border ~= "rounded" then
+            config.border = "single"
         end
-        vim.cmd.call("cursor(" .. tostring(x) .. ", col('.'))")
-        -- highlighter(lines)
-    end, { buffer = buf_num })
-    vim.keymap.set("n", "<Down>", function()
-        x = x + 1
-        if x > #lines then
-            x = #lines
-        end
-        vim.cmd.call("cursor(" .. tostring(x) .. ", col('.'))")
-        -- highlighter(lines)
-    end, { buffer = buf_num })
 end
 
 return M

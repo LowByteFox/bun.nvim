@@ -5,4 +5,9 @@ require("bun").setup({
 
 local test = require("bun.tests")
 
+test.setup({
+    width = 0.9,
+    border = "solid"
+})
+
 vim.keymap.set("n", "<leader>xd", test.handler)
